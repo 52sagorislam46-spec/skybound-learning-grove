@@ -3,6 +3,7 @@ import { initAppLanguage } from "../../lib/appLanguage";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { rankForYou, stableAppend, trendingTags, viralIds } from "./recommend";
 import { AD_CONFIG, BannerAd, InterstitialHost } from "./ads";
+import { PremiumThemeHost } from "./premium";
 import { AppUpdateBanner } from "./AppUpdate";
 import { Bell, Bird, Loader2, Menu, Pause, Search } from "lucide-react";
 import { doc, getDoc } from "firebase/firestore";

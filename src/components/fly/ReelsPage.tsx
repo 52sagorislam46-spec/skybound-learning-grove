@@ -7,7 +7,7 @@ import { Avatar } from "./Avatar";
 import { ReactionsSheet } from "./ReactionsSheet";
 import { formatViews, registerView } from "./views";
 import { useAuth } from "./AuthContext";
-import { useReels } from "./usePosts";
+import { notifyPostDeleted, useReels } from "./usePosts";
 import { PRELOADED_REELS, isPreloadedReel } from "./preloadedReels";
 import { TagFilterBar, collectTags, filterByTag } from "./TagFilterBar";
 import { rankForYou, recordComment, recordLike, recordShare, recordWatch, stableAppend, trendingTags } from "./recommend";
@@ -50,6 +50,7 @@ function Reel({
   const [showMore, setShowMore] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [shareCount, setShareCount] = useState(() => {
     // Offline fallback: start from the last known cached value if available
     try {
@@ -759,6 +760,11 @@ function Reel({
                 )}
                 {deleting ? "Deleting..." : "Delete video"}
               </button>
+            )}
+            {deleteFailed && (
+              <p className="text-xs text-red-600 text-center">
+                Could not delete this video. Check your connection and try again.
+              </p>
             )}
           </div>
         </div>

@@ -23,6 +23,7 @@ import { Avatar } from "./Avatar";
 import { formatViews, registerView } from "./views";
 import { recordLike } from "./recommend";
 import { useAuth } from "./AuthContext";
+import { notifyPostDeleted } from "./usePosts";
 import type { Comment, Post } from "./types";
 import { ShareSheet } from "./ShareSheet";
 import { StarGiftButton } from "./StarGift";
@@ -313,6 +314,7 @@ export function PostCard({
   const [boostDays, setBoostDays] = useState(1);
   const [boostBusy, setBoostBusy] = useState(false);
   const [boostLow, setBoostLow] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const menuRef = useRef<HTMLSpanElement>(null);
 
   const hiddenPostsKey = user ? `fly-hidden-posts-${user.uid}` : null;
