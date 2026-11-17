@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { doc, increment, setDoc } from "firebase/firestore";
 import { Gift, Loader2, Megaphone, Volume2, X } from "lucide-react";
 import { db } from "../../lib/firebase";
-import adVideo from "../../assets/fly-ad-49s.mp4.asset.json";
+import adVideo from "../../assets/fly-promo-49s.mp4.asset.json";
 
 /** Temporarily disabled: watching ads no longer grants stars. Set true to re-enable. */
 export const REWARDED_STARS_ENABLED = false;
