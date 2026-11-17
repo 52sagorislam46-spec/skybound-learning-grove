@@ -1,6 +1,7 @@
 import { useBackClose } from "@/hooks/useBackClose";
 import { useEffect, useState } from "react";
-import { ImagePlus, Loader2, ShoppingBag, UserPlus, X } from "lucide-react";
+import { BarChart3, ImagePlus, Loader2, Plus, ShoppingBag, Smile, UserPlus, X } from "lucide-react";
+import { FEELINGS } from "./extras";
 import { addDoc, collection, getDocs, limit, query, serverTimestamp } from "firebase/firestore";
 import { guardContent } from "./autoModeration";
 import { db, isVideoFile, uploadToCloudinary } from "../../lib/firebase";
@@ -25,6 +26,12 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
   const [productLink, setProductLink] = useState("");
   const [productFile, setProductFile] = useState<File | null>(null);
   const [productPreview, setProductPreview] = useState("");
+  const [feeling, setFeeling] = useState("");
+  const [showFeeling, setShowFeeling] = useState(false);
+  const [showPoll, setShowPoll] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+  const pollFilled = pollOptions.map((o) => o.trim()).filter(Boolean);
 
   useEffect(() => {
     if (!showTag || friends.length || !profile) return;
@@ -71,7 +78,11 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
   };
 
   const submit = async () => {
-    if (!text.trim() && !file && !showProduct) return;
+    if (!text.trim() && !file && !showProduct && !(showPoll && pollFilled.length >= 2)) return;
+    if (showPoll && pollFilled.length < 2) {
+      setError("পোলে অন্তত ২টি অপশন দিন");
+      return;
+    }
     if (showProduct && (!productTitle.trim() || !productPrice.trim() || !productLink.trim())) {
       setError("প্রোডাক্টের নাম, দাম ও অর্ডার লিংক (WhatsApp নম্বর বা ওয়েবসাইট) দিন");
       return;
@@ -84,7 +95,7 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
         uid: profile.uid,
         displayName: profile.displayName,
         username: profile.username,
-        text: `${text} ${tags} ${productTitle}`,
+        text: `${text} ${tags} ${productTitle} ${showPoll ? `${pollQuestion} ${pollFilled.join(" ")}` : ""}`,
         where: "a post",
       });
       if (blocked) {
@@ -127,6 +138,13 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
         bgStyle: bg && bg.id !== "plain" ? bg.id : "",
         exclusive,
         product,
+        feeling,
+        poll: showPoll
+          ? {
+              question: pollQuestion.trim().slice(0, 200),
+              options: pollFilled.slice(0, 4).map((t) => ({ text: t.slice(0, 80), votes: [] as string[] })),
+            }
+          : null,
         likes: [],
         comments: [],
         tags: tags
@@ -288,6 +306,43 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
             <input value={productLink} onChange={(e) => setProductLink(e.target.value)} placeholder="WhatsApp নম্বর বা ওয়েবসাইট লিংক" className="w-full px-3 py-2 rounded-xl bg-white border border-gray-100 text-sm outline-none" />
           </div>
         )}
+        {feeling && (
+          <div className="mt-2">
+            <span className="text-xs bg-amber-50 text-amber-700 rounded-full pl-2 pr-1 py-0.5 inline-flex items-center gap-1">
+              is {feeling}
+              <button type="button" aria-label="Remove feeling" onClick={() => setFeeling("")}><X size={12} /></button>
+            </span>
+          </div>
+        )}
+        {showFeeling && (
+          <div className="mt-2 grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto rounded-2xl border border-gray-100 p-2">
+            {FEELINGS.map((f) => {
+              const v = `${f.emoji} ${f.label}`;
+              return (
+                <button key={v} type="button" onClick={() => { setFeeling(v); setShowFeeling(false); }} className={`text-left text-sm px-2 py-1.5 rounded-xl ${feeling === v ? "bg-amber-50" : "active:bg-gray-50"}`}>
+                  <span className="mr-1">{f.emoji}</span>{f.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {showPoll && (
+          <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/50 p-3 space-y-2">
+            <p className="text-sm font-semibold text-sky-700">📊 পোল তৈরি করুন</p>
+            <input value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} placeholder="প্রশ্ন লিখুন" className="w-full px-3 py-2 rounded-xl bg-white border border-gray-100 text-sm outline-none" />
+            {pollOptions.map((o, i) => (
+              <div key={i} className="flex gap-2">
+                <input value={o} onChange={(e) => setPollOptions((p) => p.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`অপশন ${i + 1}`} className="flex-1 px-3 py-2 rounded-xl bg-white border border-gray-100 text-sm outline-none" />
+                {pollOptions.length > 2 && (
+                  <button type="button" aria-label="Remove option" onClick={() => setPollOptions((p) => p.filter((_, j) => j !== i))} className="text-gray-400"><X size={16} /></button>
+                )}
+              </div>
+            ))}
+            {pollOptions.length < 4 && (
+              <button type="button" onClick={() => setPollOptions((p) => [...p, ""])} className="text-sm text-sky-600 font-medium flex items-center gap-1"><Plus size={14} /> অপশন যোগ করুন</button>
+            )}
+          </div>
+        )}
         {error && (
           <p className="text-sm text-red-500 bg-red-50 rounded-xl px-3 py-2 mt-3">
             {error}
@@ -322,9 +377,15 @@ export function CreatePostModal({ onClose }: { onClose: () => void }) {
           <button type="button" onClick={() => setShowProduct((v) => !v)} className={`flex items-center gap-1.5 font-medium text-sm ${showProduct ? "text-amber-600" : "text-sky-500"}`}>
             <ShoppingBag size={18} /> Product
           </button>
+          <button type="button" onClick={() => setShowFeeling((v) => !v)} className={`flex items-center gap-1.5 font-medium text-sm ${feeling ? "text-amber-600" : "text-sky-500"}`}>
+            <Smile size={18} /> Feeling
+          </button>
+          <button type="button" onClick={() => setShowPoll((v) => !v)} className={`flex items-center gap-1.5 font-medium text-sm ${showPoll ? "text-sky-700" : "text-sky-500"}`}>
+            <BarChart3 size={18} /> Poll
+          </button>
           <button
             onClick={submit}
-            disabled={busy || (!text.trim() && !file && !(showProduct && productTitle.trim()))}
+            disabled={busy || (!text.trim() && !file && !(showProduct && productTitle.trim()) && !(showPoll && pollFilled.length >= 2))}
             className="h-10 px-6 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 text-white font-semibold flex items-center gap-2 disabled:opacity-50"
           >
             {busy && <Loader2 size={16} className="animate-spin" />}
