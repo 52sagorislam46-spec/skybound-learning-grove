@@ -25,6 +25,7 @@ export const AD_CONFIG = {
   meta: { placementBanner: "", placementInterstitial: "", placementRewarded: "" },
   rewardStars: 5,
   rewardSeconds: 10, // 5–15s
+  skipSeconds: 5, // full-screen ad skip countdown
   reelsInterstitialEvery: 5,
   feedAdEvery: 6,
   chatAdEvery: 7,

@@ -82,6 +82,14 @@ function pruneDeleted<T extends { id: string }>(list: T[]): T[] {
 }
 
 /**
+ * Drop one post from a list that may contain both the live window and older,
+ * already-loaded pages — the rule a deleted post must follow everywhere.
+ */
+export function dropPost<T extends { id: string }>(list: T[], id: string): T[] {
+  return list.filter((p) => p.id !== id);
+}
+
+/**
  * Merges the live first page with previously loaded older pages and drops any
  * post that disappeared from the watched window — so a deleted post vanishes
  * immediately from the feed, reels and profile grids, no refresh needed.
@@ -138,7 +146,7 @@ export function usePosts(pageSize = 40) {
   // Drop a deleted post from this feed instantly, even when it was loaded from
   // an older page that the live listener does not watch.
   useEffect(
-    () => subscribeToDeletions((id) => setPosts((previous) => previous.filter((p) => p.id !== id))),
+    () => subscribeToDeletions((id) => setPosts((previous) => dropPost(previous, id))),
     [],
   );
 
@@ -335,7 +343,7 @@ export function useReels(pageSize = 5) {
   // Drop a deleted reel from this list instantly, even when it came from an
   // older page that the live listener does not watch.
   useEffect(
-    () => subscribeToDeletions((id) => setReels((prev) => prev.filter((p) => p.id !== id))),
+    () => subscribeToDeletions((id) => setReels((prev) => dropPost(prev, id))),
     [],
   );
 
