@@ -280,6 +280,12 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
                     {new Date(suspendedUntil(m)).toLocaleDateString()}
                   </p>
                 )}
+                {isPremium(m) && (
+                  <p className="text-[11px] font-semibold text-sky-600 flex items-center gap-1">
+                    <Crown size={11} /> Premium until{" "}
+                    {new Date(Number(m.premiumUntil ?? 0)).toLocaleDateString()}
+                  </p>
+                )}
                 <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
                   <Phone size={12} /> {m.phone || "—"}
                 </p>
@@ -358,21 +364,30 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
                       >
                         <KeyRound size={14} /> Set new password
                       </button>
+                      {isPremium(m) && (
+                        <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-500 flex items-center gap-1">
+                          <Crown size={11} /> Premium until{" "}
+                          {new Date(Number(m.premiumUntil ?? 0)).toLocaleDateString()}
+                        </p>
+                      )}
                       {[30, 365].map((days) => (
                         <button
                           key={days}
                           onClick={() => void grantPremium(m, days)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-amber-600 border-t border-gray-100 hover:bg-amber-50"
                         >
-                          <Crown size={14} /> Premium on ({days} days)
+                          <Crown size={14} />{" "}
+                          {isPremium(m) ? `Add ${days} more days` : `Premium on (${days} days)`}
                         </button>
                       ))}
-                      <button
-                        onClick={() => void grantPremium(m, 0)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 border-t border-gray-100 hover:bg-gray-50"
-                      >
-                        <Crown size={14} /> Premium off
-                      </button>
+                      {isPremium(m) && (
+                        <button
+                          onClick={() => void grantPremium(m, 0)}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 border-t border-gray-100 hover:bg-gray-50"
+                        >
+                          <Crown size={14} /> Premium off
+                        </button>
+                      )}
                       <button
 
                         onClick={() => {
