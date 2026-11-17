@@ -8,7 +8,7 @@ import { ReactionsSheet } from "./ReactionsSheet";
 import { formatViews, registerView } from "./views";
 import { useAuth } from "./AuthContext";
 import { notifyPostDeleted, useReels } from "./usePosts";
-import { PRELOADED_REELS, isPreloadedReel } from "./preloadedReels";
+import { isPreloadedReel } from "./preloadedReels";
 import { TagFilterBar, collectTags, filterByTag } from "./TagFilterBar";
 import { rankForYou, recordComment, recordLike, recordShare, recordWatch, stableAppend, trendingTags } from "./recommend";
 import { CommentItem } from "./PostCard";
@@ -814,15 +814,7 @@ export function ReelsPage({
 
   const allReels = useMemo(
     () => {
-      const real = allReelsRaw.filter((p) => secureUrl(p.mediaUrl));
-      // Blend preloaded reels in: one after every 2 real reels, rest at the end.
-      const out: typeof real = [];
-      let k = 0;
-      real.forEach((p, i) => {
-        out.push(p);
-        if (i % 2 === 1 && k < PRELOADED_REELS.length) out.push(PRELOADED_REELS[k++]!);
-      });
-      return [...out, ...PRELOADED_REELS.slice(k)];
+      return allReelsRaw.filter((p) => secureUrl(p.mediaUrl));
     },
     [allReelsRaw],
   );
