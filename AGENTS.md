@@ -32,4 +32,5 @@ use the editor.
 <!-- AGENT-MEMORY:BEGIN -->
 - Restore the existing Fly application on its established TanStack and Firebase foundation; preserve its routes, source features, provider integrations, and advertising settings rather than replacing them.
 - Keep original bundled assets when present and preserve pointers when original media bytes are external; do not substitute missing media with unrelated content.
+- This app's backend is an external Firebase project, not Lovable Cloud; anonymous sign-in is disabled there, so no code path may depend on reading data while signed out. Admin password changes must swap the member's Firebase Auth password through a throwaway Firebase app instance instead.
 <!-- AGENT-MEMORY:END -->
