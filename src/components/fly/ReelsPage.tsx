@@ -1,6 +1,7 @@
+import { uploadToCloudinary } from "../../lib/firebase";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent } from "react";
 import { onReelSeen } from "./ads";
-import { Check, Copy, Download, Eye, Heart, Loader2, MessageCircle, MoreHorizontal, Music2, Pause, Play, RotateCcw, RotateCw, Search, Send, Trash2, Volume2, VolumeX } from "lucide-react";
+import { Check, Copy, Download, Eye, Heart, ImagePlus, Loader2, MessageCircle, MoreHorizontal, Music2, Pause, Play, RotateCcw, RotateCw, Search, Send, Trash2, Volume2, VolumeX } from "lucide-react";
 import { arrayRemove, arrayUnion, deleteDoc, doc, getDoc, increment, onSnapshot, updateDoc } from "firebase/firestore";
 import { db, secureUrl } from "../../lib/firebase";
 import { Avatar } from "./Avatar";
@@ -38,6 +39,7 @@ function Reel({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
+  const [commentImg, setCommentImg] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [heartBurst, setHeartBurst] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
@@ -296,9 +298,17 @@ function Reel({
   };
 
   const addComment = async () => {
-    if (!user || !profile || !commentText.trim()) return;
+    if (!user || !profile || (!commentText.trim() && !commentImg)) return;
     recordComment(post);
     setBusy(true);
+    let imageUrl = "";
+    try {
+      if (commentImg) imageUrl = (await uploadToCloudinary(commentImg)).url;
+    } catch {
+      setBusy(false);
+      alert("Photo upload failed");
+      return;
+    }
     const comment: Comment = {
       id: `${Date.now()}-${user.uid}`,
       authorId: user.uid,
@@ -308,16 +318,19 @@ function Reel({
       createdAt: Date.now(),
       likes: [],
       replies: [],
+      ...(imageUrl ? { imageUrl } : {}),
       ...(isVipOf(profile, post.authorId) ? { vip: true } : {}),
     };
     try {
       if (preloaded) {
         post.comments.push(comment);
         setCommentText("");
+        setCommentImg(null);
         return;
       }
       await updateDoc(ref, { comments: arrayUnion(comment) });
       setCommentText("");
+      setCommentImg(null);
     } finally {
       setBusy(false);
     }
@@ -623,7 +636,17 @@ function Reel({
                   />
                 ))}
             </div>
+            {commentImg && (
+              <div className="flex items-center gap-2 px-3 pt-2 text-xs text-gray-500">
+                <img src={URL.createObjectURL(commentImg)} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                <button onClick={() => setCommentImg(null)} className="text-rose-500">Remove</button>
+              </div>
+            )}
             <div className="flex items-center gap-2 p-3 border-t border-gray-100">
+              <label className="shrink-0 w-10 h-10 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center text-sky-500 cursor-pointer" aria-label="Add photo">
+                <ImagePlus size={18} />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => setCommentImg(e.target.files?.[0] ?? null)} />
+              </label>
               <input
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
@@ -632,7 +655,7 @@ function Reel({
               />
               <button
                 onClick={addComment}
-                disabled={busy || !commentText.trim()}
+                disabled={busy || (!commentText.trim() && !commentImg)}
                 className="h-10 px-4 rounded-2xl bg-sky-500 text-white text-sm font-semibold disabled:opacity-50"
               >
                 Post
