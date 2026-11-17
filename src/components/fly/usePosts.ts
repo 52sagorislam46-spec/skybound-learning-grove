@@ -57,6 +57,30 @@ function toPost(id: string, data: any): Post {
 // Hide leftover demo/test posts (e.g. "Judge Bot" checks) from the feed.
 const isDemoPost = (p: Post) => /^judge\b/i.test(p.authorName) || /^JUDGE-/.test(p.text);
 
+// ---- Deletion bus ----
+// The live listener only watches the newest page of posts, so a post deleted
+// while it sits on an older, already-loaded page would otherwise stay on screen
+// in the timeline, in reels and on the profile until a full reload. Every
+// mounted feed subscribes here and drops the id the moment the delete succeeds.
+const deletedIds = new Set<string>();
+const deleteListeners = new Set<(id: string) => void>();
+
+/** Tell every mounted feed that this post is gone, so it vanishes at once. */
+export function notifyPostDeleted(id: string) {
+  deletedIds.add(id);
+  deleteListeners.forEach((l) => l(id));
+}
+
+function subscribeToDeletions(fn: (id: string) => void) {
+  deleteListeners.add(fn);
+  return () => void deleteListeners.delete(fn);
+}
+
+function pruneDeleted<T extends { id: string }>(list: T[]): T[] {
+  if (!deletedIds.size) return list;
+  return list.filter((p) => !deletedIds.has(p.id));
+}
+
 /**
  * Merges the live first page with previously loaded older pages and drops any
  * post that disappeared from the watched window — so a deleted post vanishes
@@ -103,13 +127,20 @@ export function usePosts(pageSize = 40) {
         lastDocRef.current = snap.docs[snap.docs.length - 1] ?? null;
         const prevWindowIds = windowIdsRef.current;
         windowIdsRef.current = new Set(fresh.map((post) => post.id));
-        setPosts((previous) => mergePostPages(previous, fresh, prevWindowIds).list);
+        setPosts((previous) => pruneDeleted(mergePostPages(previous, fresh, prevWindowIds).list));
         setHasMore(snap.docs.length === pageSize);
         setLoading(false);
       },
       () => setLoading(false),
     );
   }, [pageSize]);
+
+  // Drop a deleted post from this feed instantly, even when it was loaded from
+  // an older page that the live listener does not watch.
+  useEffect(
+    () => subscribeToDeletions((id) => setPosts((previous) => previous.filter((p) => p.id !== id))),
+    [],
+  );
 
   const loadMore = useCallback(async () => {
     if (loadingMoreRef.current || !hasMore) return;
@@ -133,8 +164,10 @@ export function usePosts(pageSize = 40) {
       lastDocRef.current = snap.docs[snap.docs.length - 1] ?? lastDoc;
       setPosts((previous) => {
         const ids = new Set(previous.map((post) => post.id));
-        return [...previous, ...older.filter((post) => !ids.has(post.id))].sort(
-          (a, b) => b.createdAt - a.createdAt,
+        return pruneDeleted(
+          [...previous, ...older.filter((post) => !ids.has(post.id))].sort(
+            (a, b) => b.createdAt - a.createdAt,
+          ),
         );
       });
       setHasMore(snap.docs.length === pageSize);
@@ -229,7 +262,7 @@ export function useReels(pageSize = 5) {
           .filter(isVideoPost);
         const prevWindowIds = windowIdsRef.current;
         windowIdsRef.current = new Set(fresh.map((p) => p.id));
-        setReels((prev) => mergePostPages(prev, fresh, prevWindowIds).list);
+        setReels((prev) => pruneDeleted(mergePostPages(prev, fresh, prevWindowIds).list));
         if (snap.docs.length > 0) {
           firstPageLastRef.current = snap.docs[snap.docs.length - 1] ?? null;
         }
@@ -262,8 +295,10 @@ export function useReels(pageSize = 5) {
       if (batch.length > 0) {
         setReels((prev) => {
           const ids = new Set(prev.map((p) => p.id));
-          return [...prev, ...batch.filter((p) => !ids.has(p.id))].sort(
-            (a, b) => b.createdAt - a.createdAt,
+          return pruneDeleted(
+            [...prev, ...batch.filter((p) => !ids.has(p.id))].sort(
+              (a, b) => b.createdAt - a.createdAt,
+            ),
           );
         });
       }
@@ -297,6 +332,12 @@ export function useReels(pageSize = 5) {
     }
   }, [baseQuery, fetchSize]);
 
+  // Drop a deleted reel from this list instantly, even when it came from an
+  // older page that the live listener does not watch.
+  useEffect(
+    () => subscribeToDeletions((id) => setReels((prev) => prev.filter((p) => p.id !== id))),
+    [],
+  );
 
   return { reels, loading, loadingMore, hasMore, loadMore, refresh, refreshing };
 }
