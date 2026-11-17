@@ -23,6 +23,7 @@ import { Avatar } from "./Avatar";
 import { formatViews, registerView } from "./views";
 import { recordLike } from "./recommend";
 import { useAuth } from "./AuthContext";
+import { notifyPostDeleted } from "./usePosts";
 import type { Comment, Post } from "./types";
 import { ShareSheet } from "./ShareSheet";
 import { StarGiftButton } from "./StarGift";
@@ -313,6 +314,7 @@ export function PostCard({
   const [boostDays, setBoostDays] = useState(1);
   const [boostBusy, setBoostBusy] = useState(false);
   const [boostLow, setBoostLow] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const menuRef = useRef<HTMLSpanElement>(null);
 
   const hiddenPostsKey = user ? `fly-hidden-posts-${user.uid}` : null;
@@ -432,6 +434,11 @@ export function PostCard({
           লেখা কপি করা হয়েছে
         </div>
       )}
+      {deleteFailed && (
+        <p className="mb-2 text-xs text-red-600 bg-red-50 rounded-xl px-3 py-2">
+          Could not delete this post. Check your connection and try again.
+        </p>
+      )}
       <div className="flex items-start gap-3">
         <button onClick={() => onOpenProfile(post.authorId)}>
           <Avatar uid={post.authorId} src={post.authorPhoto} alt={post.authorName} size={40} />
@@ -494,7 +501,9 @@ export function PostCard({
                         <button
                           onClick={() => {
                             setMenuOpen(false);
-                            deleteDoc(ref);
+                            deleteDoc(ref)
+                              .then(() => notifyPostDeleted(post.id))
+                              .catch(() => setDeleteFailed(true));
                           }}
                           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-gray-50"
                         >

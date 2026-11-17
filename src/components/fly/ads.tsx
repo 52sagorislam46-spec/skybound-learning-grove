@@ -25,6 +25,7 @@ export const AD_CONFIG = {
   meta: { placementBanner: "", placementInterstitial: "", placementRewarded: "" },
   rewardStars: 5,
   rewardSeconds: 10, // 5–15s
+  skipSeconds: 5, // full-screen ad skip countdown
   reelsInterstitialEvery: 5,
   feedAdEvery: 6,
   chatAdEvery: 7,
@@ -180,10 +181,10 @@ export function InterstitialHost() {
   const premium = isPremium(profile);
   useEffect(() => setAdFree(premium), [premium]);
   const [open, setOpen] = useState(false);
-  const [left, setLeft] = useState(5);
+  const [left, setLeft] = useState(AD_CONFIG.skipSeconds);
   useEffect(() => {
     const l = () => {
-      setLeft(5);
+      setLeft(AD_CONFIG.skipSeconds);
       // Tell the visible reel to pause itself before the ad starts playing.
       window.dispatchEvent(new Event("fly-ad-opened"));
       setOpen(true);

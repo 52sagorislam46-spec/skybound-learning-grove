@@ -5,10 +5,11 @@
 - [x] Members page: show password button and set new password button.
 - [x] Restore Fly logo image.
 - [x] Fix ad auto-resume after skip/finish and live camera over-zoom (pending user device check).
-- [ ] Fix admin Set-new-password: admin-set password must log in on first try (Firestore rules now block logged-out reads).
-- [ ] Premium subscription: real-time profile updates; activate all premium perks (ad-free, verified badge, premium theme/stickers/reactions); admin premium toggle in Members page.
-- [ ] Ad rules: autoplay without play-icon screen, 5s skip countdown, full 49s playback if not skipped, auto-return to reels, no star reward for watching the ad.
-- [ ] Hide +/- zoom controls and percentage in all image viewers; keep pinch-to-zoom and drag.
-- [ ] Delete post/video must immediately vanish from timeline, reels, and profile (cache/snapshot fix).
-- [ ] Tighten Firebase rules (passwords stored as plain text) — needs user's Firebase console.
 - [x] Stop stale incoming group calls from ringing repeatedly and harden call/voice media handling without removing existing features.
+- [x] Fix admin Set-new-password: admin-set password now changes the member's Firebase Auth password immediately (throwaway session swap), so it works on the very first login. Verified root cause: anonymous sign-in is disabled for this project (ADMIN_ONLY_OPERATION), so the old logged-out fallback could never run.
+- [x] Premium subscription: Members list is now a live listener; premium theme applies app-wide from a fresh load; admin toggle is status-aware and extends remaining time instead of replacing it. Ad-free, verified badge, stickers and extra reactions confirmed wired.
+- [x] Ad rules: autoplay with no play-icon screen, 5s skip countdown (now an explicit config value), full playback then close, auto-return to reels with a muted retry, and no star reward for watching the ad. Tests cover the no-star and 5s rules.
+- [x] Hide +/- zoom controls and percentage in all image viewers; pinch-to-zoom and drag kept (verified in both viewer implementations; story/highlight images have no zoom UI).
+- [x] Delete post/video now vanishes immediately from timeline, reels and profile: deletions are broadcast to every mounted feed, including older loaded pages. Tests cover the rule.
+- [ ] Tighten Firebase rules (passwords stored as plain text) — needs the user's Firebase console; rules text supplied in chat.
+- [ ] Confirm the house ad creative really runs 49 seconds — the media bytes are external and could not be measured from here.

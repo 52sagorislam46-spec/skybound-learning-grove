@@ -17,7 +17,7 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import { collection, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "../../lib/firebase";
 import { Avatar } from "./Avatar";
@@ -29,6 +29,7 @@ import {
 } from "./moderation";
 import type { UserProfile } from "./types";
 import { adminSetPassword } from "./adminPassword";
+import { isPremium } from "./premium";
 
 
 function toMillis(value: unknown): number {
@@ -52,10 +53,11 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
 
 
   useEffect(() => {
-    let alive = true;
-    getDocs(collection(db, "users"))
-      .then((snap) => {
-        if (!alive) return;
+    // Live member list: new members, suspensions and Premium changes show up
+    // the moment they happen instead of only when the page is reopened.
+    const unsub = onSnapshot(
+      collection(db, "users"),
+      (snap) => {
         const list = snap.docs.map((d) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const data: any = d.data();
@@ -76,6 +78,7 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
             following: data.following ?? [],
             suspendedUntil: data.suspendedUntil ?? 0,
             suspendedReason: data.suspendedReason ?? "",
+            premiumUntil: Number(data.premiumUntil ?? 0),
             createdAt: toMillis(data.createdAt),
           } as UserProfile;
         });
@@ -87,14 +90,14 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
         setPasswords(pw);
         list.sort((a, b) => b.createdAt - a.createdAt);
         setMembers(list);
-      })
-      .catch(() => setError("Could not load members."))
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
+        setLoading(false);
+      },
+      () => {
+        setError("Could not load members.");
+        setLoading(false);
+      },
+    );
+    return unsub;
   }, []);
 
   const remove = async (uid: string) => {
@@ -178,9 +181,26 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
     }
     setBusyUid(m.uid);
     try {
-      await adminSetPassword(m.uid, pw.trim());
-      setPasswords((p) => ({ ...p, [m.uid]: { current: p[m.uid]?.current ?? "", pending: pw.trim() } }));
-      setNotice(`New password set for ${m.displayName}. It works on their next login.`);
+      const r = await adminSetPassword(
+        m.uid,
+        m.email ?? "",
+        pw.trim(),
+        passwords[m.uid]?.current ?? "",
+      );
+      setPasswords((p) => ({
+        ...p,
+        [m.uid]:
+          r.status === "applied"
+            ? { current: pw.trim(), pending: "" }
+            : { current: p[m.uid]?.current ?? "", pending: pw.trim() },
+      }));
+      if (r.status === "applied") {
+        setNotice(`New password set for ${m.displayName}. It works right away.`);
+      } else {
+        setNotice(
+          `New password saved for ${m.displayName}, but it only activates the next time they log in: ${r.reason}`,
+        );
+      }
     } catch {
       setError("Could not set the new password.");
     } finally {
@@ -194,9 +214,17 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
     setNotice("");
     setBusyUid(m.uid);
     try {
-      await updateDoc(doc(db, "users", m.uid), {
-        premiumUntil: days > 0 ? Date.now() + days * 86400000 : 0,
-      });
+      const current = Number(m.premiumUntil ?? 0);
+      // Granting more days extends whatever is still running instead of
+      // throwing away time the member already paid for.
+      const until =
+        days > 0
+          ? Math.max(Date.now(), current > Date.now() ? current : 0) + days * 86400000
+          : 0;
+      await updateDoc(doc(db, "users", m.uid), { premiumUntil: until });
+      setMembers((list) =>
+        list.map((x) => (x.uid === m.uid ? { ...x, premiumUntil: until } : x)),
+      );
       setNotice(days > 0 ? `Premium on for ${m.displayName} (${days} days).` : `Premium off for ${m.displayName}.`);
     } catch {
       setError("Could not change Premium.");
@@ -250,6 +278,12 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
                   <p className="text-[11px] font-semibold text-amber-600">
                     Suspended until{" "}
                     {new Date(suspendedUntil(m)).toLocaleDateString()}
+                  </p>
+                )}
+                {isPremium(m) && (
+                  <p className="text-[11px] font-semibold text-sky-600 flex items-center gap-1">
+                    <Crown size={11} /> Premium until{" "}
+                    {new Date(Number(m.premiumUntil ?? 0)).toLocaleDateString()}
                   </p>
                 )}
                 <p className="text-xs text-gray-500 flex items-center gap-1 truncate">
@@ -330,21 +364,30 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
                       >
                         <KeyRound size={14} /> Set new password
                       </button>
+                      {isPremium(m) && (
+                        <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-500 flex items-center gap-1">
+                          <Crown size={11} /> Premium until{" "}
+                          {new Date(Number(m.premiumUntil ?? 0)).toLocaleDateString()}
+                        </p>
+                      )}
                       {[30, 365].map((days) => (
                         <button
                           key={days}
                           onClick={() => void grantPremium(m, days)}
                           className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-amber-600 border-t border-gray-100 hover:bg-amber-50"
                         >
-                          <Crown size={14} /> Premium on ({days} days)
+                          <Crown size={14} />{" "}
+                          {isPremium(m) ? `Add ${days} more days` : `Premium on (${days} days)`}
                         </button>
                       ))}
-                      <button
-                        onClick={() => void grantPremium(m, 0)}
-                        className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 border-t border-gray-100 hover:bg-gray-50"
-                      >
-                        <Crown size={14} /> Premium off
-                      </button>
+                      {isPremium(m) && (
+                        <button
+                          onClick={() => void grantPremium(m, 0)}
+                          className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-600 border-t border-gray-100 hover:bg-gray-50"
+                        >
+                          <Crown size={14} /> Premium off
+                        </button>
+                      )}
                       <button
 
                         onClick={() => {

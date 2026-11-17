@@ -7,7 +7,7 @@ import { Avatar } from "./Avatar";
 import { ReactionsSheet } from "./ReactionsSheet";
 import { formatViews, registerView } from "./views";
 import { useAuth } from "./AuthContext";
-import { useReels } from "./usePosts";
+import { notifyPostDeleted, useReels } from "./usePosts";
 import { PRELOADED_REELS, isPreloadedReel } from "./preloadedReels";
 import { TagFilterBar, collectTags, filterByTag } from "./TagFilterBar";
 import { rankForYou, recordComment, recordLike, recordShare, recordWatch, stableAppend, trendingTags } from "./recommend";
@@ -50,6 +50,7 @@ function Reel({
   const [showMore, setShowMore] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const [shareCount, setShareCount] = useState(() => {
     // Offline fallback: start from the last known cached value if available
     try {
@@ -220,16 +221,30 @@ function Reel({
     observer.observe(el);
     // Pause this reel the moment a full-screen ad opens (no click needed),
     // keeping currentTime so it resumes from the exact same spot later.
+    let wasPlayingBeforeAd = false;
     const onAdOpened = () => {
       const r = el.getBoundingClientRect();
       const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
-      if (r.height > 0 && visible / r.height > 0.6 && !el.paused) el.pause();
+      wasPlayingBeforeAd = r.height > 0 && visible / r.height > 0.6 && !el.paused;
+      if (wasPlayingBeforeAd) el.pause();
     };
-    // Resume this reel after a full-screen ad closes, if it's on screen.
+    // Resume this reel after a full-screen ad closes, if it's on screen and was
+    // playing before the ad. A reel the member had paused on purpose stays put.
     const onAdClosed = () => {
+      if (!wasPlayingBeforeAd) return;
       const r = el.getBoundingClientRect();
       const visible = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
-      if (r.height > 0 && visible / r.height > 0.6) el.play().catch(() => {});
+      if (!(r.height > 0 && visible / r.height > 0.6)) return;
+      el.play().catch(() => {
+        // Autoplay with sound blocked: play muted so the reel never stays stuck.
+        el.muted = true;
+        el.play().catch(() => {});
+        document.addEventListener(
+          "pointerdown",
+          () => { el.muted = mutedRef.current; },
+          { once: true, capture: true },
+        );
+      });
     };
     window.addEventListener("fly-ad-opened", onAdOpened);
     window.addEventListener("fly-ad-closed", onAdClosed);
@@ -388,7 +403,10 @@ function Reel({
     setDeleting(true);
     try {
       await deleteDoc(ref);
+      notifyPostDeleted(post.id);
       setShowMore(false);
+    } catch {
+      setDeleteFailed(true);
     } finally {
       setDeleting(false);
     }
@@ -742,6 +760,11 @@ function Reel({
                 )}
                 {deleting ? "Deleting..." : "Delete video"}
               </button>
+            )}
+            {deleteFailed && (
+              <p className="text-xs text-red-600 text-center">
+                Could not delete this video. Check your connection and try again.
+              </p>
             )}
           </div>
         </div>

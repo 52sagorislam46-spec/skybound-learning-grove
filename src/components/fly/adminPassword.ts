@@ -1,31 +1,83 @@
-import {
-  signInAnonymously,
-  signInWithEmailAndPassword,
-  signOut,
-  updatePassword,
-} from "firebase/auth";
-import {
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-import { auth, db } from "../../lib/firebase";
+import { deleteApp, initializeApp, type FirebaseApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, signOut, updatePassword } from "firebase/auth";
+import { deleteField, doc, getDoc, updateDoc } from "firebase/firestore";
+import { auth, db, firebaseConfig } from "../../lib/firebase";
 
-/** Admin sets a new password for a member; applied on the member's next login. */
-export async function adminSetPassword(uid: string, newPassword: string) {
-  await updateDoc(doc(db, "users", uid), { pendingPassword: newPassword });
+export type AdminPasswordResult =
+  | { status: "applied" }
+  | { status: "queued"; reason: string };
+
+let swapCount = 0;
+
+/**
+ * Sign in as the member in a separate, throwaway Firebase app instance and
+ * change their Firebase Auth password there. The admin's own session lives in
+ * the main app instance and is never touched, and nothing is read while signed
+ * out — so the Firestore rules that block logged-out reads stay as they are.
+ */
+async function swapInThrowawaySession(email: string, current: string, next: string) {
+  const name = `fly-admin-password-${Date.now()}-${swapCount++}`;
+  let secondary: FirebaseApp | null = null;
+  try {
+    secondary = initializeApp(firebaseConfig, name);
+    const secondaryAuth = getAuth(secondary);
+    const cred = await signInWithEmailAndPassword(secondaryAuth, email, current);
+    await updatePassword(cred.user, next);
+    await signOut(secondaryAuth);
+  } finally {
+    if (secondary) await deleteApp(secondary).catch(() => {});
+  }
 }
 
-function findUserByEmail(email: string) {
-  return getDocs(
-    query(collection(db, "users"), where("email", "==", email.trim()), limit(1)),
-  ).then((snap) => snap.docs[0]);
+/**
+ * Admin sets a new password for a member.
+ *
+ * When the member's current password is known it is changed inside Firebase
+ * Auth straight away, so the new password works on the member's very first
+ * login attempt. When it is not known (never stored, or changed by the member
+ * through a reset link before the app could sync it), the new password is
+ * queued instead and activates automatically the next time the member logs in
+ * with their old one.
+ */
+export async function adminSetPassword(
+  uid: string,
+  email: string,
+  newPassword: string,
+  currentPassword: string,
+): Promise<AdminPasswordResult> {
+  const next = newPassword.trim();
+  if (next.length < 6) throw new Error("Password must be at least 6 characters.");
+  const current = currentPassword.trim();
+  const mail = email.trim();
+
+  if (!mail) {
+    await updateDoc(doc(db, "users", uid), { pendingPassword: next });
+    return { status: "queued", reason: "this member has no email address on file." };
+  }
+  if (!current) {
+    await updateDoc(doc(db, "users", uid), { pendingPassword: next });
+    return { status: "queued", reason: "their current password is not saved yet." };
+  }
+
+  try {
+    await swapInThrowawaySession(mail, current, next);
+    await updateDoc(doc(db, "users", uid), {
+      adminPassword: next,
+      pendingPassword: deleteField(),
+    });
+    return { status: "applied" };
+  } catch (err) {
+    // The saved current password no longer matches this account (or the
+    // network refused). Fall back to the queue so nothing is lost.
+    const code = (err as { code?: string } | null)?.code ?? "";
+    await updateDoc(doc(db, "users", uid), { pendingPassword: next }).catch(() => {});
+    return {
+      status: "queued",
+      reason: code
+        ? `their saved current password was refused (${code}).`
+        : "the password change could not be sent.",
+    };
+  }
 }
 
 /**
@@ -44,39 +96,6 @@ export async function applyPendingPasswordAfterLogin(uid: string): Promise<boole
     await updateDoc(snap.ref, { adminPassword: pending, pendingPassword: deleteField() });
     return true;
   } catch {
-    return false;
-  }
-}
-
-/**
- * If the admin set a new password for this email and the typed password
- * matches it, sign the member in with the stored previous password and switch
- * the account to the new one — so the new password works on the first try.
- * Firestore rules only allow signed-in reads, so a short anonymous session is
- * used just to read the pending password.
- */
-export async function loginWithAdminSetPassword(email: string, typed: string): Promise<boolean> {
-  try {
-    await signInAnonymously(auth);
-  } catch {
-    // Anonymous sign-in is not enabled for this Firebase project; the pending
-    // password still activates automatically after the next successful login.
-    return false;
-  }
-  try {
-    const d = await findUserByEmail(email);
-    if (!d) return false;
-    const data = d.data() as { pendingPassword?: string; adminPassword?: string };
-    if (!data.pendingPassword || data.pendingPassword !== typed || !data.adminPassword) {
-      return false;
-    }
-    await signOut(auth);
-    const cred = await signInWithEmailAndPassword(auth, email, data.adminPassword);
-    await updatePassword(cred.user, typed);
-    await updateDoc(d.ref, { adminPassword: typed, pendingPassword: deleteField() });
-    return true;
-  } catch {
-    await signOut(auth).catch(() => {});
     return false;
   }
 }
