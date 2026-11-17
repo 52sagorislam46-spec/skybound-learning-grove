@@ -178,9 +178,26 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
     }
     setBusyUid(m.uid);
     try {
-      await adminSetPassword(m.uid, pw.trim());
-      setPasswords((p) => ({ ...p, [m.uid]: { current: p[m.uid]?.current ?? "", pending: pw.trim() } }));
-      setNotice(`New password set for ${m.displayName}. It works on their next login.`);
+      const r = await adminSetPassword(
+        m.uid,
+        m.email ?? "",
+        pw.trim(),
+        passwords[m.uid]?.current ?? "",
+      );
+      setPasswords((p) => ({
+        ...p,
+        [m.uid]:
+          r.status === "applied"
+            ? { current: pw.trim(), pending: "" }
+            : { current: p[m.uid]?.current ?? "", pending: pw.trim() },
+      }));
+      if (r.status === "applied") {
+        setNotice(`New password set for ${m.displayName}. It works right away.`);
+      } else {
+        setNotice(
+          `New password saved for ${m.displayName}, but it only activates the next time they log in: ${r.reason}`,
+        );
+      }
     } catch {
       setError("Could not set the new password.");
     } finally {

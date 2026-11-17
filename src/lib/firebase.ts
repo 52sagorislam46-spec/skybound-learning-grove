@@ -7,7 +7,9 @@ import {
   persistentMultipleTabManager,
 } from "firebase/firestore";
 
-const firebaseConfig = {
+// Exported so admin tools can open a separate, throwaway Firebase app instance
+// (see components/fly/adminPassword.ts) without repeating these values.
+export const firebaseConfig = {
   apiKey: "AIzaSyDfzHhkNtrs3A_soHAWE51le-zrlbeXulc",
   authDomain: "fly-c7445.firebaseapp.com",
   projectId: "fly-c7445",

@@ -25,10 +25,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import {
-  applyPendingPasswordAfterLogin,
-  loginWithAdminSetPassword,
-} from "./adminPassword";
+import { applyPendingPasswordAfterLogin } from "./adminPassword";
 import { auth, db, uploadToCloudinary, DEFAULT_AVATAR } from "../../lib/firebase";
 import { startPresence } from "./presence";
 import type { UserProfile } from "./types";
@@ -315,21 +312,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logIn = async (email: string, password: string) => {
-    try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      // Keep the admin-visible password in sync.
-      void setDoc(
-        doc(db, "users", cred.user.uid),
-        { adminPassword: password },
-        { merge: true },
-      ).catch(() => {});
-      // Activate the admin-set password if one is waiting for this account.
-      void applyPendingPasswordAfterLogin(cred.user.uid);
-    } catch (err) {
-      // Admin may have set a new password for this account.
-      const used = await loginWithAdminSetPassword(email, password).catch(() => false);
-      if (!used) throw err;
-    }
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    // Keep the admin-visible password in sync.
+    void setDoc(
+      doc(db, "users", cred.user.uid),
+      { adminPassword: password },
+      { merge: true },
+    ).catch(() => {});
+    // Activate the admin-set password if one is waiting for this account.
+    void applyPendingPasswordAfterLogin(cred.user.uid);
   };
 
   const logOut = async () => {
