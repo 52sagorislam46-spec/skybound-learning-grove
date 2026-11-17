@@ -537,6 +537,7 @@ export function FlyApp() {
         <GroupCallProvider>
           <Shell />
           <InterstitialHost />
+          <PremiumThemeHost />
         </GroupCallProvider>
       </CallProvider>
     </AuthProvider>

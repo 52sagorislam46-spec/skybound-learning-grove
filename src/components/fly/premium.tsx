@@ -42,21 +42,53 @@ export const PREMIUM_STICKERS = ["🦅", "💎", "🚀", "🌈", "🔥", "👑",
 export const PREMIUM_REACTIONS = ["❤️‍🔥", "😍", "🤩", "🥳", "💯", "🫶"];
 
 const THEME_KEY = "fly-premium-theme";
-/** Applies the special Premium app theme when the member has it switched on. */
-export function usePremiumTheme(active: boolean) {
-  const [on, setOn] = useState(false);
+
+// Shared so the Wallet page's Premium card and the always-mounted theme host
+// below always agree on whether the member switched their theme on.
+const themeListeners = new Set<() => void>();
+let themeOn =
+  typeof window !== "undefined" && localStorage.getItem(THEME_KEY) === "1";
+
+function setThemeOn(next: boolean) {
+  themeOn = next;
+  try {
+    localStorage.setItem(THEME_KEY, next ? "1" : "0");
+  } catch {
+    /* private mode / storage disabled */
+  }
+  themeListeners.forEach((l) => l());
+}
+
+function useThemeOn() {
+  const [, force] = useState(0);
   useEffect(() => {
-    setOn(localStorage.getItem(THEME_KEY) === "1");
+    const l = () => force((n) => n + 1);
+    themeListeners.add(l);
+    return () => void themeListeners.delete(l);
   }, []);
+  return themeOn;
+}
+
+/** The member's own switch for the special Premium app theme. */
+export function usePremiumTheme(_active: boolean) {
+  const on = useThemeOn();
+  return { on, toggle: () => setThemeOn(!on) };
+}
+
+/**
+ * Applies the saved Premium theme across the whole app. Mounted once next to
+ * the other always-on hosts, so the theme survives a fresh page load and does
+ * not depend on the Wallet page being open.
+ */
+export function PremiumThemeHost() {
+  const { profile } = useAuth();
+  const active = isPremium(profile);
+  const on = useThemeOn();
   useEffect(() => {
     document.documentElement.classList.toggle("fly-premium-theme", active && on);
+    return () => document.documentElement.classList.remove("fly-premium-theme");
   }, [active, on]);
-  const toggle = () => {
-    const next = !on;
-    localStorage.setItem(THEME_KEY, next ? "1" : "0");
-    setOn(next);
-  };
-  return { on, toggle };
+  return null;
 }
 
 export function PremiumCard() {

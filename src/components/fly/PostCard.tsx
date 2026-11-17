@@ -494,7 +494,9 @@ export function PostCard({
                         <button
                           onClick={() => {
                             setMenuOpen(false);
-                            deleteDoc(ref);
+                            deleteDoc(ref)
+                              .then(() => notifyPostDeleted(post.id))
+                              .catch(() => setDeleteFailed(true));
                           }}
                           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-red-500 hover:bg-gray-50"
                         >
