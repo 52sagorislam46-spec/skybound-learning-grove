@@ -17,7 +17,7 @@ import {
   UserCheck,
   Users,
 } from "lucide-react";
-import { collection, deleteDoc, doc, getDocs, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth, db } from "../../lib/firebase";
 import { Avatar } from "./Avatar";
@@ -29,6 +29,7 @@ import {
 } from "./moderation";
 import type { UserProfile } from "./types";
 import { adminSetPassword } from "./adminPassword";
+import { isPremium } from "./premium";
 
 
 function toMillis(value: unknown): number {
@@ -52,10 +53,11 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
 
 
   useEffect(() => {
-    let alive = true;
-    getDocs(collection(db, "users"))
-      .then((snap) => {
-        if (!alive) return;
+    // Live member list: new members, suspensions and Premium changes show up
+    // the moment they happen instead of only when the page is reopened.
+    const unsub = onSnapshot(
+      collection(db, "users"),
+      (snap) => {
         const list = snap.docs.map((d) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const data: any = d.data();
@@ -76,6 +78,7 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
             following: data.following ?? [],
             suspendedUntil: data.suspendedUntil ?? 0,
             suspendedReason: data.suspendedReason ?? "",
+            premiumUntil: Number(data.premiumUntil ?? 0),
             createdAt: toMillis(data.createdAt),
           } as UserProfile;
         });
@@ -87,14 +90,14 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
         setPasswords(pw);
         list.sort((a, b) => b.createdAt - a.createdAt);
         setMembers(list);
-      })
-      .catch(() => setError("Could not load members."))
-      .finally(() => {
-        if (alive) setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
+        setLoading(false);
+      },
+      () => {
+        setError("Could not load members.");
+        setLoading(false);
+      },
+    );
+    return unsub;
   }, []);
 
   const remove = async (uid: string) => {
@@ -211,9 +214,17 @@ export function MembersPage({ onBack }: { onBack: () => void }) {
     setNotice("");
     setBusyUid(m.uid);
     try {
-      await updateDoc(doc(db, "users", m.uid), {
-        premiumUntil: days > 0 ? Date.now() + days * 86400000 : 0,
-      });
+      const current = Number(m.premiumUntil ?? 0);
+      // Granting more days extends whatever is still running instead of
+      // throwing away time the member already paid for.
+      const until =
+        days > 0
+          ? Math.max(Date.now(), current > Date.now() ? current : 0) + days * 86400000
+          : 0;
+      await updateDoc(doc(db, "users", m.uid), { premiumUntil: until });
+      setMembers((list) =>
+        list.map((x) => (x.uid === m.uid ? { ...x, premiumUntil: until } : x)),
+      );
       setNotice(days > 0 ? `Premium on for ${m.displayName} (${days} days).` : `Premium off for ${m.displayName}.`);
     } catch {
       setError("Could not change Premium.");
