@@ -71,7 +71,7 @@ export function notifyPostDeleted(id: string) {
   deleteListeners.forEach((l) => l(id));
 }
 
-function subscribeToDeletions(fn: (id: string) => void) {
+export function subscribeToDeletions(fn: (id: string) => void) {
   deleteListeners.add(fn);
   return () => void deleteListeners.delete(fn);
 }

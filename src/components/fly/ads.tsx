@@ -181,10 +181,10 @@ export function InterstitialHost() {
   const premium = isPremium(profile);
   useEffect(() => setAdFree(premium), [premium]);
   const [open, setOpen] = useState(false);
-  const [left, setLeft] = useState(5);
+  const [left, setLeft] = useState(AD_CONFIG.skipSeconds);
   useEffect(() => {
     const l = () => {
-      setLeft(5);
+      setLeft(AD_CONFIG.skipSeconds);
       // Tell the visible reel to pause itself before the ad starts playing.
       window.dispatchEvent(new Event("fly-ad-opened"));
       setOpen(true);
