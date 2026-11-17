@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Copy, Play, Search, X } from "lucide-react";
+import { usePosts } from "./usePosts";
+import { PostCard } from "./PostCard";
 import { collection, limit, onSnapshot, query } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { Avatar } from "./Avatar";
 import { toMillis } from "./chat";
-import type { UserProfile } from "./types";
+import type { Post, UserProfile } from "./types";
 
 export function SearchPage({
   onOpenProfile,
@@ -15,6 +17,12 @@ export function SearchPage({
 }) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [term, setTerm] = useState("");
+  const { posts } = usePosts(60);
+  const [openPost, setOpenPost] = useState<Post | null>(null);
+  const explore = useMemo(
+    () => posts.filter((p) => p.mediaUrl && !p.exclusive && (p.mediaType === "image" || p.mediaType === "video")),
+    [posts],
+  );
 
   useEffect(() => {
     return onSnapshot(query(collection(db, "users"), limit(100)), (snap) => {
@@ -72,6 +80,38 @@ export function SearchPage({
           />
         </div>
       </header>
+      {!term.trim() && explore.length > 0 && (
+        <section className="mb-2">
+          <h2 className="px-4 pt-3 pb-2 text-sm font-semibold text-gray-900">Explore</h2>
+          <div className="grid grid-cols-3 gap-0.5">
+            {explore.map((p) => (
+              <button key={p.id} onClick={() => setOpenPost(p)} className="relative aspect-square bg-gray-100 overflow-hidden" aria-label="Open post">
+                {p.mediaType === "video" ? (
+                  <video src={p.mediaUrl} muted playsInline preload="metadata" className="w-full h-full object-cover" />
+                ) : (
+                  <img src={p.mediaUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
+                )}
+                {p.mediaType === "video" && <Play size={16} className="absolute top-1.5 right-1.5 text-white drop-shadow fill-current" />}
+                {p.media && p.media.length > 1 && <Copy size={15} className="absolute top-1.5 right-1.5 text-white drop-shadow" />}
+              </button>
+            ))}
+          </div>
+          <h2 className="px-4 pt-4 pb-1 text-sm font-semibold text-gray-900">People</h2>
+        </section>
+      )}
+      {openPost && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center overflow-y-auto" onClick={() => setOpenPost(null)}>
+          <div className="w-full max-w-md bg-white min-h-full sm:min-h-0 sm:my-8 sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end p-2">
+              <button onClick={() => setOpenPost(null)} aria-label="Close" className="w-9 h-9 rounded-full flex items-center justify-center text-gray-600"><X size={20} /></button>
+            </div>
+            <PostCard
+              post={posts.find((x) => x.id === openPost.id) ?? openPost}
+              onOpenProfile={(uid) => { setOpenPost(null); onOpenProfile(uid); }}
+            />
+          </div>
+        </div>
+      )}
       <ul>
         {results.map((u) => (
           <li key={u.uid}>
